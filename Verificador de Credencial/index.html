@@ -138,11 +138,16 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 
     <button class="btn-scan" onclick="iniciarEscaneo()">
       <span class="btn-icon">📷</span>
-      Escanear código QR
+      Escanear con Cámara
     </button>
 
+    <button class="btn-new-scan" onclick="document.getElementById('fileInput').click()" style="max-width: 380px; margin-bottom: 20px; border-color: rgba(201,146,42,.4); color: var(--gold-light);">
+      📂 &nbsp;Escanear desde Galería/Foto
+    </button>
+    <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="escanearDesdeArchivo(event)">
+
     <p class="scan-note">
-      Se solicitará acceso a la cámara de tu dispositivo.<br>
+      Se solicitará acceso a la cámara de tu dispositivo o almacenamiento.<br>
       Ningún dato es almacenado ni enviado a servidores.
     </p>
   </div>
@@ -162,7 +167,10 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
       <canvas id="canvasEl"></canvas>
     </div>
     <div class="scan-status" id="scanStatus">Buscando código QR…</div>
-    <button class="btn-cancel" onclick="cancelarEscaneo()">✕ &nbsp;Cancelar</button>
+    <div style="display: flex; gap: 10px; justify-content: center; width: 100%; max-width: 420px;">
+      <button class="btn-cancel" onclick="cancelarEscaneo()">✕ &nbsp;Cancelar</button>
+      <button id="btnSwitchCamera" class="btn-cancel" onclick="cambiarCamara()" style="display: none; border-color: rgba(74,179,244,.4); color: var(--blue);">🔄 &nbsp;Cambiar cámara</button>
+    </div>
   </div>
 
   <!-- PANTALLA 3: RESULTADO -->
@@ -184,6 +192,10 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 })();
 
 let stream=null, rafId=null;
+let videoDevices = [];
+let currentDeviceIndex = 0;
+let lastScanTime = 0;
+const SCAN_INTERVAL = 150; // Intervalo de escaneo en ms
 
 // ── CAMBIA ESTA URL POR TU DOMINIO DE VERCEL ──────────────
 const BASE_URL = 'https://verificador-de-qr-skywatchers.vercel.app/';
@@ -201,6 +213,12 @@ async function iniciarEscaneo(){
   const statusEl=document.getElementById('scanStatus');
   statusEl.textContent='Iniciando cámara…';
   statusEl.className='scan-status';
+  
+  // Reiniciar cámaras y ocultar botón de switch por si acaso
+  videoDevices = [];
+  currentDeviceIndex = 0;
+  document.getElementById('btnSwitchCamera').style.display = 'none';
+
   try{
     stream=await navigator.mediaDevices.getUserMedia({
       video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},
@@ -212,8 +230,30 @@ async function iniciarEscaneo(){
     video.onloadedmetadata=()=>{
       video.play();
       statusEl.textContent='Buscando código QR…';
+      lastScanTime = 0;
       rafId=requestAnimationFrame(tick);
     };
+
+    // Detectar cámaras disponibles después de obtener permiso
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      videoDevices = devices.filter(d => d.kind === 'videoinput');
+      
+      const activeTrack = stream.getVideoTracks()[0];
+      const settings = activeTrack ? activeTrack.getSettings() : null;
+      const activeDeviceId = settings ? settings.deviceId : null;
+      
+      if (activeDeviceId) {
+        currentDeviceIndex = videoDevices.findIndex(d => d.deviceId === activeDeviceId);
+        if (currentDeviceIndex === -1) currentDeviceIndex = 0;
+      }
+      
+      if (videoDevices.length > 1) {
+        document.getElementById('btnSwitchCamera').style.display = 'inline-flex';
+      }
+    } catch (e) {
+      console.warn("Error al identificar dispositivos de video:", e);
+    }
   }catch(err){
     statusEl.textContent='No se pudo acceder a la cámara.';
     statusEl.className='scan-status err';
@@ -221,33 +261,152 @@ async function iniciarEscaneo(){
   }
 }
 
+// CAMBIAR CÁMARA
+async function cambiarCamara() {
+  if (videoDevices.length <= 1) return;
+  
+  detenerCamara();
+  
+  currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+  const nextDevice = videoDevices[currentDeviceIndex];
+  
+  const statusEl = document.getElementById('scanStatus');
+  statusEl.textContent = 'Cambiando cámara…';
+  statusEl.className = 'scan-status';
+  
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { deviceId: { exact: nextDevice.deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    const video = document.getElementById('videoEl');
+    video.srcObject = stream;
+    video.setAttribute('playsinline', true);
+    video.onloadedmetadata = () => {
+      video.play();
+      statusEl.textContent = 'Buscando código QR…';
+      lastScanTime = 0;
+      rafId = requestAnimationFrame(tick);
+    };
+  } catch (err) {
+    console.error("Error al cambiar de cámara:", err);
+    statusEl.textContent = 'Error al cambiar de cámara.';
+    statusEl.className = 'scan-status err';
+  }
+}
+
 // LOOP QR
-function tick(){
+function tick(timestamp){
+  if(!rafId) return;
+  
   const video=document.getElementById('videoEl');
   const canvas=document.getElementById('canvasEl');
+  
   if(video.readyState!==video.HAVE_ENOUGH_DATA){
     rafId=requestAnimationFrame(tick); return;
   }
-  canvas.width=video.videoWidth;
-  canvas.height=video.videoHeight;
-  const ctx=canvas.getContext('2d');
-  ctx.drawImage(video,0,0,canvas.width,canvas.height);
-  const imageData=ctx.getImageData(0,0,canvas.width,canvas.height);
-  const code=jsQR(imageData.data,imageData.width,imageData.height,{inversionAttempts:'dontInvert'});
-  if(code&&code.data){
-    const statusEl=document.getElementById('scanStatus');
-    statusEl.textContent='✓ Código detectado…';
-    statusEl.className='scan-status found';
-    const payload=code.data.trim();
-    detenerCamara();
-    setTimeout(()=>{
-      const url = BASE_URL + '/#' + payload;
-      history.replaceState(null,'', url);
-      mostrarResultado(payload);
-    },400);
-    return;
+  
+  const now = timestamp || performance.now();
+  if (now - lastScanTime >= SCAN_INTERVAL) {
+    lastScanTime = now;
+    
+    let width = video.videoWidth;
+    let height = video.videoHeight;
+    
+    // Redimensionar para mejorar rendimiento en móviles (máx 640px)
+    const maxDimension = 640;
+    if (width > maxDimension || height > maxDimension) {
+      if (width > height) {
+        height = Math.round((height * maxDimension) / width);
+        width = maxDimension;
+      } else {
+        width = Math.round((width * maxDimension) / height);
+        height = maxDimension;
+      }
+    }
+    
+    canvas.width=width;
+    canvas.height=height;
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(video,0,0,width,height);
+    
+    try {
+      const imageData=ctx.getImageData(0,0,width,height);
+      // 'attemptBoth' es crucial para soportar QRs invertidos/estilizados
+      const code=jsQR(imageData.data,imageData.width,imageData.height,{inversionAttempts:'attemptBoth'});
+      
+      if(code&&code.data){
+        const statusEl=document.getElementById('scanStatus');
+        statusEl.textContent='✓ Código detectado…';
+        statusEl.className='scan-status found';
+        const payload=code.data.trim();
+        detenerCamara();
+        setTimeout(()=>{
+          const url = BASE_URL + '/#' + payload;
+          history.replaceState(null,'', url);
+          mostrarResultado(payload);
+        },400);
+        return;
+      }
+    } catch (e) {
+      console.error("Error al decodificar cuadro:", e);
+    }
   }
   rafId=requestAnimationFrame(tick);
+}
+
+// ESCANEAR DESDE ARCHIVO (GALERÍA)
+function escanearDesdeArchivo(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.getElementById('canvasEl');
+      let width = img.width;
+      let height = img.height;
+      
+      const maxDimension = 1024;
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      try {
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'attemptBoth'
+        });
+        
+        if (code && code.data) {
+          const payload = code.data.trim();
+          const url = BASE_URL + '/#' + payload;
+          history.replaceState(null, '', url);
+          mostrarResultado(payload);
+        } else {
+          alert("No se pudo detectar un código QR en la imagen. Por favor, asegúrate de que la foto sea nítida y tenga buena iluminación.");
+        }
+      } catch (err) {
+        console.error("Error al decodificar imagen:", err);
+        alert("Ocurrió un error al procesar la imagen.");
+      }
+      event.target.value = '';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 // DETENER CÁMARA
