@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#050d1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Skywatchers — Verificador</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<style>
+:root{--gold:#C9922A;--gold-light:#F0B84B;--blue:#4AB3F4;--blue-dim:rgba(74,179,244,0.15);--green:#3DFFA0;--red:#FF5C5C;--dark:#050d1a;--card-bg:rgba(10,20,40,0.9);}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{min-height:100vh;min-height:-webkit-fill-available;background:var(--dark);font-family:'Exo 2',sans-serif;color:#fff;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 15% 30%,rgba(74,179,244,0.07) 0%,transparent 55%),radial-gradient(ellipse at 85% 70%,rgba(201,146,42,0.05) 0%,transparent 50%);pointer-events:none;z-index:0;}
+.stars{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0;}
+.star{position:absolute;background:#fff;border-radius:50%;animation:twinkle var(--d,3s) ease-in-out infinite;opacity:0;}
+@keyframes twinkle{0%,100%{opacity:0;transform:scale(0.5)}50%{opacity:var(--o,.6);transform:scale(1)}}
+.page{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding-bottom:60px;}
+.header{width:100%;padding:44px 24px 28px;text-align:center;}
+.header-logo{font-family:'Orbitron',sans-serif;font-size:clamp(1.1rem,5vw,1.5rem);font-weight:900;color:var(--gold);letter-spacing:.18em;text-transform:uppercase;}
+.header-sub{font-size:.68rem;letter-spacing:.22em;color:rgba(255,255,255,.28);margin-top:5px;text-transform:uppercase;}
+.header-line{width:80px;height:1px;background:linear-gradient(to right,transparent,var(--gold),transparent);margin:12px auto 0;}
+
+/* SCAN SCREEN */
+#screenScan{width:100%;display:flex;flex-direction:column;align-items:center;padding:0 16px;}
+.scan-hero{text-align:center;padding:8px 0 32px;}
+.scan-icon-wrap{position:relative;width:110px;height:110px;margin:0 auto 24px;}
+.ring{position:absolute;inset:0;border-radius:50%;border:2px solid rgba(74,179,244,.4);animation:pulseOut 2s ease-out infinite;}
+.ring2{animation-delay:.7s;}
+@keyframes pulseOut{0%{transform:scale(.7);opacity:.8}100%{transform:scale(1.5);opacity:0}}
+.icon-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3.2rem;animation:float 3.5s ease-in-out infinite;}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.scan-title{font-family:'Orbitron',sans-serif;font-size:clamp(.9rem,4vw,1.1rem);font-weight:700;letter-spacing:.12em;color:#fff;margin-bottom:10px;text-transform:uppercase;}
+.scan-desc{font-size:.82rem;color:rgba(255,255,255,.35);line-height:1.7;max-width:320px;margin:0 auto;}
+.btn-scan{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;max-width:380px;padding:18px 24px;background:linear-gradient(135deg,var(--gold) 0%,#E8A830 100%);border:none;border-radius:14px;font-family:'Orbitron',sans-serif;font-size:.8rem;font-weight:700;letter-spacing:.18em;color:#0a0a0a;cursor:pointer;text-transform:uppercase;transition:all .2s;box-shadow:0 8px 32px rgba(201,146,42,.3);margin-bottom:20px;}
+.btn-scan:active{transform:scale(.97);}
+.btn-icon{font-size:1.4rem;}
+.scan-note{font-size:.68rem;color:rgba(255,255,255,.2);letter-spacing:.1em;text-align:center;line-height:1.6;max-width:320px;}
+
+/* CAMERA SCREEN */
+#screenCamera{width:100%;display:none;flex-direction:column;align-items:center;padding:0 16px;gap:16px;}
+.camera-label{font-family:'Orbitron',sans-serif;font-size:.65rem;letter-spacing:.25em;color:rgba(74,179,244,.6);text-transform:uppercase;text-align:center;}
+.camera-viewport{position:relative;width:100%;max-width:420px;border-radius:20px;overflow:hidden;border:1px solid rgba(74,179,244,.3);background:#000;box-shadow:0 0 40px rgba(74,179,244,.15);}
+#videoEl{width:100%;display:block;max-height:70vh;object-fit:cover;}
+.scan-frame{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.scan-frame-inner{width:min(240px,65%);height:min(240px,65%);position:relative;}
+.scan-frame-inner::before,.scan-frame-inner::after{content:'';position:absolute;width:28px;height:28px;border-color:var(--gold);border-style:solid;}
+.scan-frame-inner::before{top:0;left:0;border-width:3px 0 0 3px;border-radius:4px 0 0 0;}
+.scan-frame-inner::after{bottom:0;right:0;border-width:0 3px 3px 0;border-radius:0 0 4px 0;}
+.corner-tr,.corner-bl{position:absolute;width:28px;height:28px;border-color:var(--gold);border-style:solid;}
+.corner-tr{top:0;right:0;border-width:3px 3px 0 0;border-radius:0 4px 0 0;}
+.corner-bl{bottom:0;left:0;border-width:0 0 3px 3px;border-radius:0 0 0 4px;}
+.scan-line{position:absolute;left:4px;right:4px;height:2px;background:linear-gradient(to right,transparent,var(--blue),transparent);animation:scanLine 2s ease-in-out infinite;border-radius:1px;}
+@keyframes scanLine{0%{top:10%;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:90%;opacity:0}}
+#canvasEl{display:none;}
+.scan-status{font-size:.78rem;color:rgba(255,255,255,.4);letter-spacing:.1em;text-align:center;min-height:20px;}
+.scan-status.found{color:var(--green);font-weight:600;}
+.scan-status.err{color:var(--red);}
+.btn-cancel{padding:12px 28px;background:transparent;border:1px solid rgba(255,255,255,.15);border-radius:10px;color:rgba(255,255,255,.4);font-family:'Orbitron',sans-serif;font-size:.65rem;letter-spacing:.2em;cursor:pointer;text-transform:uppercase;transition:all .2s;}
+.btn-cancel:active{opacity:.6;}
+
+/* RESULT SCREEN */
+#screenResult{width:100%;display:none;flex-direction:column;align-items:center;gap:12px;padding:0 16px;}
+.verified-banner{width:100%;max-width:480px;background:linear-gradient(135deg,rgba(61,255,160,.1),rgba(61,255,160,.04));border:1px solid rgba(61,255,160,.3);border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:14px;animation:fadeDown .4s ease both;}
+.verified-icon{font-size:1.5rem;flex-shrink:0;}
+.verified-text strong{display:block;font-family:'Orbitron',sans-serif;font-size:.65rem;letter-spacing:.15em;color:var(--green);text-transform:uppercase;}
+.verified-text span{font-size:.72rem;color:rgba(255,255,255,.35);line-height:1.4;}
+.credential-card{width:100%;max-width:480px;background:var(--card-bg);border:1px solid rgba(74,179,244,.18);border-radius:20px;overflow:hidden;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 30px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.04);animation:fadeDown .45s ease both;}
+.card-top{background:linear-gradient(135deg,rgba(10,22,48,.95),rgba(5,13,26,.98));padding:22px 22px 18px;border-bottom:1px solid rgba(74,179,244,.1);display:flex;align-items:center;gap:18px;position:relative;overflow:hidden;}
+.card-top::after{content:'';position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:radial-gradient(circle,rgba(74,179,244,.07),transparent 70%);}
+.member-num-badge{position:absolute;top:12px;right:16px;font-family:'Orbitron',sans-serif;font-size:.55rem;letter-spacing:.12em;color:rgba(74,179,244,.4);}
+.member-num-badge span{color:var(--blue);font-size:.72rem;font-weight:700;}
+.member-avatar{width:68px;height:68px;border-radius:50%;background:linear-gradient(135deg,rgba(74,179,244,.18),rgba(201,146,42,.18));border:2px solid rgba(74,179,244,.25);display:flex;align-items:center;justify-content:center;font-size:1.9rem;flex-shrink:0;}
+.member-info{flex:1;min-width:0;}
+.member-name{font-family:'Orbitron',sans-serif;font-size:clamp(.95rem,4.5vw,1.25rem);font-weight:700;color:#fff;word-break:break-word;line-height:1.2;}
+.member-rol{display:inline-block;margin-top:6px;background:rgba(201,146,42,.13);border:1px solid rgba(201,146,42,.32);border-radius:20px;padding:3px 12px;font-size:.68rem;font-weight:600;letter-spacing:.1em;color:var(--gold-light);text-transform:uppercase;}
+.card-body{padding:18px 22px;}
+.data-row{display:flex;align-items:flex-start;gap:14px;padding:13px 0;border-bottom:1px solid rgba(255,255,255,.04);animation:fadeDown .5s ease both;}
+.data-row:last-child{border-bottom:none;}
+.data-icon{width:36px;height:36px;border-radius:10px;background:var(--blue-dim);border:1px solid rgba(74,179,244,.18);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;margin-top:1px;}
+.data-content{flex:1;min-width:0;}
+.data-label{font-size:.6rem;letter-spacing:.18em;color:rgba(255,255,255,.3);text-transform:uppercase;margin-bottom:3px;}
+.data-value{font-size:.95rem;font-weight:600;color:#fff;line-height:1.3;word-break:break-word;}
+.vigencia-pill{display:inline-flex;align-items:center;gap:6px;background:rgba(201,146,42,.1);border:1px solid rgba(201,146,42,.22);border-radius:20px;padding:4px 12px;font-size:.8rem;font-weight:600;color:var(--gold-light);}
+.vigencia-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:blink 2s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.sangre-badge{display:inline-block;background:linear-gradient(135deg,rgba(255,92,92,.18),rgba(255,92,92,.08));border:1px solid rgba(255,92,92,.3);border-radius:10px;padding:5px 16px;font-family:'Orbitron',sans-serif;font-size:1.05rem;font-weight:700;color:#FF8080;letter-spacing:.1em;}
+.condicion-ok{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--green);font-weight:600;}
+.condicion-alert{background:linear-gradient(135deg,rgba(255,92,92,.1),rgba(255,92,92,.04));border:1px solid rgba(255,92,92,.22);border-radius:10px;padding:10px 12px;font-size:.88rem;color:#FFB0B0;font-weight:600;line-height:1.4;}
+.card-footer{padding:14px 22px;border-top:1px solid rgba(74,179,244,.08);display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.footer-sky{font-family:'Orbitron',sans-serif;font-size:.5rem;letter-spacing:.18em;color:rgba(255,255,255,.18);text-transform:uppercase;}
+.footer-ok{font-size:.58rem;color:rgba(61,255,160,.45);letter-spacing:.1em;}
+.emergency-card{width:100%;max-width:480px;background:linear-gradient(135deg,rgba(255,92,92,.1),rgba(255,92,92,.04));border:1px solid rgba(255,92,92,.28);border-radius:16px;overflow:hidden;animation:fadeDown .55s ease both;}
+.emergency-header{background:rgba(255,92,92,.13);padding:11px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,92,92,.18);}
+.emergency-header span{font-family:'Orbitron',sans-serif;font-size:.62rem;letter-spacing:.2em;color:var(--red);text-transform:uppercase;font-weight:700;}
+.emergency-body{padding:14px 18px;}
+.emergency-name{font-size:1rem;font-weight:700;color:#fff;margin-bottom:12px;}
+.btn-call{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;background:linear-gradient(135deg,#c0392b,#e74c3c);border:none;border-radius:12px;color:#fff;font-family:'Orbitron',sans-serif;font-size:.72rem;font-weight:700;letter-spacing:.14em;text-decoration:none;text-transform:uppercase;cursor:pointer;box-shadow:0 4px 20px rgba(231,76,60,.3);transition:all .15s;}
+.btn-call:active{transform:scale(.97);}
+.btn-new-scan{width:100%;max-width:480px;padding:14px;background:transparent;border:1px solid rgba(74,179,244,.25);border-radius:12px;color:var(--blue);font-family:'Orbitron',sans-serif;font-size:.68rem;letter-spacing:.2em;cursor:pointer;text-transform:uppercase;transition:all .2s;}
+.btn-new-scan:active{background:rgba(74,179,244,.08);}
+.error-card{width:100%;max-width:480px;background:rgba(255,92,92,.06);border:1px solid rgba(255,92,92,.22);border-radius:20px;padding:40px 28px;text-align:center;animation:fadeDown .4s ease both;}
+.error-icon{font-size:2.8rem;margin-bottom:14px;}
+.error-title{font-family:'Orbitron',sans-serif;font-size:.85rem;letter-spacing:.15em;color:var(--red);margin-bottom:10px;text-transform:uppercase;}
+.error-desc{font-size:.82rem;color:rgba(255,255,255,.35);line-height:1.6;}
+.disclaimer{font-size:.62rem;color:rgba(255,255,255,.12);letter-spacing:.12em;text-align:center;padding:0 24px;line-height:1.7;max-width:480px;text-transform:uppercase;}
+@keyframes fadeDown{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:translateY(0)}}
+.d1{animation-delay:.05s}.d2{animation-delay:.1s}.d3{animation-delay:.15s}
+</style>
+</head>
+<body>
+
+<div class="stars" id="stars"></div>
+
+<div class="page">
+
+  <div class="header">
+    <div class="header-logo">Skywatchers</div>
+    <div class="header-sub">Durango México · Verificador de Credencial</div>
+    <div class="header-line"></div>
+  </div>
+
+  <!-- PANTALLA 1: INICIO -->
+  <div id="screenScan">
+    <div class="scan-hero">
+      <div class="scan-icon-wrap">
+        <div class="ring"></div>
+        <div class="ring ring2"></div>
+        <div class="icon-center">📡</div>
+      </div>
+      <div class="scan-title">Verificar Credencial</div>
+      <p class="scan-desc">
+        Escanea el código QR del reverso de la credencial de un miembro para verificar su identidad y datos de emergencia.
+      </p>
+    </div>
+
+    <button class="btn-scan" onclick="iniciarEscaneo()">
+      <span class="btn-icon">📷</span>
+      Escanear código QR
+    </button>
+
+    <p class="scan-note">
+      Se solicitará acceso a la cámara de tu dispositivo.<br>
+      Ningún dato es almacenado ni enviado a servidores.
+    </p>
+  </div>
+
+  <!-- PANTALLA 2: CÁMARA -->
+  <div id="screenCamera">
+    <div class="camera-label">Apunta al código QR de la credencial</div>
+    <div class="camera-viewport">
+      <video id="videoEl" playsinline autoplay muted></video>
+      <div class="scan-frame">
+        <div class="scan-frame-inner">
+          <div class="corner-tr"></div>
+          <div class="corner-bl"></div>
+          <div class="scan-line"></div>
+        </div>
+      </div>
+      <canvas id="canvasEl"></canvas>
+    </div>
+    <div class="scan-status" id="scanStatus">Buscando código QR…</div>
+    <button class="btn-cancel" onclick="cancelarEscaneo()">✕ &nbsp;Cancelar</button>
+  </div>
+
+  <!-- PANTALLA 3: RESULTADO -->
+  <div id="screenResult"></div>
+
+</div>
+
+<script>
+// ESTRELLAS
+(function(){
+  const c=document.getElementById('stars');
+  for(let i=0;i<80;i++){
+    const s=document.createElement('div');
+    s.className='star';
+    const sz=Math.random()*2+0.5;
+    s.style.cssText=`width:${sz}px;height:${sz}px;top:${Math.random()*100}%;left:${Math.random()*100}%;--d:${2+Math.random()*4}s;--o:${0.3+Math.random()*0.5};animation-delay:${Math.random()*5}s`;
+    c.appendChild(s);
+  }
+})();
+
+let stream=null, rafId=null;
+
+// ── CAMBIA ESTA URL POR TU DOMINIO DE VERCEL ──────────────
+const BASE_URL = 'https://TU-DOMINIO.vercel.app';
+// ─────────────────────────────────────────────────────────
+
+// Al cargar: si hay hash, mostrar resultado directo
+window.addEventListener('load',()=>{
+  const hash=window.location.hash.slice(1);
+  if(hash){ mostrarResultado(hash); }
+});
+
+// INICIAR CÁMARA
+async function iniciarEscaneo(){
+  mostrarPantalla('camera');
+  const statusEl=document.getElementById('scanStatus');
+  statusEl.textContent='Iniciando cámara…';
+  statusEl.className='scan-status';
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},
+      audio:false
+    });
+    const video=document.getElementById('videoEl');
+    video.srcObject=stream;
+    video.setAttribute('playsinline',true);
+    video.onloadedmetadata=()=>{
+      video.play();
+      statusEl.textContent='Buscando código QR…';
+      rafId=requestAnimationFrame(tick);
+    };
+  }catch(err){
+    statusEl.textContent='No se pudo acceder a la cámara.';
+    statusEl.className='scan-status err';
+    console.error(err);
+  }
+}
+
+// LOOP QR
+function tick(){
+  const video=document.getElementById('videoEl');
+  const canvas=document.getElementById('canvasEl');
+  if(video.readyState!==video.HAVE_ENOUGH_DATA){
+    rafId=requestAnimationFrame(tick); return;
+  }
+  canvas.width=video.videoWidth;
+  canvas.height=video.videoHeight;
+  const ctx=canvas.getContext('2d');
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  const imageData=ctx.getImageData(0,0,canvas.width,canvas.height);
+  const code=jsQR(imageData.data,imageData.width,imageData.height,{inversionAttempts:'dontInvert'});
+  if(code&&code.data){
+    const statusEl=document.getElementById('scanStatus');
+    statusEl.textContent='✓ Código detectado…';
+    statusEl.className='scan-status found';
+    const payload=code.data.trim();
+    detenerCamara();
+    setTimeout(()=>{
+      const url = BASE_URL + '/#' + payload;
+      history.replaceState(null,'', url);
+      mostrarResultado(payload);
+    },400);
+    return;
+  }
+  rafId=requestAnimationFrame(tick);
+}
+
+// DETENER CÁMARA
+function detenerCamara(){
+  if(rafId){cancelAnimationFrame(rafId);rafId=null;}
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  document.getElementById('videoEl').srcObject=null;
+}
+
+// CANCELAR
+function cancelarEscaneo(){
+  detenerCamara();
+  mostrarPantalla('scan');
+}
+
+// MOSTRAR RESULTADO
+function mostrarResultado(base64){
+  mostrarPantalla('result');
+  let datos;
+  try{
+    const json=decodeURIComponent(escape(atob(base64)));
+    datos=JSON.parse(json);
+    if(!datos.nombre||!datos.rol||!datos.numero) throw new Error('invalid');
+  }catch(e){ renderError(); return; }
+  renderDatos(datos);
+}
+
+// RENDER DATOS
+function renderDatos(d){
+  const{nombre='—',rol='—',numero='—',vigencia='—',sangre='—',
+    condicion='—',tieneCondicion='NO',
+    contactoEmergenciaNombre='—',contactoEmergenciaTel='—'}=d;
+  const ahora=new Date().toLocaleString('es-MX',{dateStyle:'long',timeStyle:'short'});
+  const tieneEmerg=tieneCondicion==='SI'&&contactoEmergenciaTel!=='—';
+
+  document.getElementById('screenResult').innerHTML=`
+    <div class="verified-banner">
+      <div class="verified-icon">✅</div>
+      <div class="verified-text">
+        <strong>Credencial verificada</strong>
+        <span>Miembro activo · Escaneada el ${ahora}</span>
+      </div>
+    </div>
+    <div class="credential-card">
+      <div class="card-top">
+        <div class="member-num-badge">N° <span>#${esc(numero)}</span></div>
+        <div class="member-avatar">🌌</div>
+        <div class="member-info">
+          <div class="member-name">${esc(nombre)}</div>
+          <div class="member-rol">${esc(rol)}</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="data-row d1">
+          <div class="data-icon">🗓️</div>
+          <div class="data-content">
+            <div class="data-label">Vigencia de credencial</div>
+            <div class="data-value">
+              <span class="vigencia-pill"><span class="vigencia-dot"></span>${esc(vigencia)}</span>
+            </div>
+          </div>
+        </div>
+        <div class="data-row d2">
+          <div class="data-icon">🩸</div>
+          <div class="data-content">
+            <div class="data-label">Tipo de sangre</div>
+            <div class="data-value"><span class="sangre-badge">${esc(sangre)}</span></div>
+          </div>
+        </div>
+        <div class="data-row d3">
+          <div class="data-icon">🏥</div>
+          <div class="data-content">
+            <div class="data-label">Condición médica relevante</div>
+            <div class="data-value">
+              ${tieneCondicion==='NO'
+                ?'<div class="condicion-ok"><span>✓</span> Sin condición médica relevante</div>'
+                :`<div class="condicion-alert">⚠️ &nbsp;${esc(condicion)}</div>`}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="footer-sky">Skywatchers Durango · Artemis II 2026</span>
+        <span class="footer-ok">✦ Verificado</span>
+      </div>
+    </div>
+    ${tieneEmerg?`
+    <div class="emergency-card">
+      <div class="emergency-header"><span>🚨</span><span>Contacto de emergencia</span></div>
+      <div class="emergency-body">
+        <div class="emergency-name">👤 ${esc(contactoEmergenciaNombre)}</div>
+        <a class="btn-call" href="tel:${esc(contactoEmergenciaTel)}">
+          📞 &nbsp;Llamar · ${esc(contactoEmergenciaTel)}
+        </a>
+      </div>
+    </div>`:''}
+    <button class="btn-new-scan" onclick="nuevaLectura()">📷 &nbsp;Escanear otra credencial</button>
+    <p class="disclaimer">Esta información es confidencial<br>Solo para uso en emergencias · Skywatchers Durango México</p>
+  `;
+}
+
+// RENDER ERROR
+function renderError(){
+  document.getElementById('screenResult').innerHTML=`
+    <div class="error-card">
+      <div class="error-icon">⚠️</div>
+      <div class="error-title">QR Inválido</div>
+      <p class="error-desc">No se pudo leer la información.<br>El código puede estar dañado o no pertenecer a Skywatchers Durango.</p>
+    </div>
+    <button class="btn-new-scan" onclick="nuevaLectura()" style="max-width:480px;width:calc(100% - 32px)">
+      📷 &nbsp;Intentar de nuevo
+    </button>`;
+}
+
+// NUEVA LECTURA
+function nuevaLectura(){
+  history.replaceState(null,'',window.location.pathname);
+  document.getElementById('screenResult').innerHTML='';
+  mostrarPantalla('scan');
+}
+
+// NAVEGACIÓN
+function mostrarPantalla(p){
+  document.getElementById('screenScan').style.display   =p==='scan'  ?'flex':'none';
+  document.getElementById('screenCamera').style.display =p==='camera'?'flex':'none';
+  document.getElementById('screenResult').style.display =p==='result'?'flex':'none';
+}
+
+// ESCAPE HTML
+function esc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
