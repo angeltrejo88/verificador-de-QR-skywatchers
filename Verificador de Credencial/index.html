@@ -207,6 +207,25 @@ window.addEventListener('load',()=>{
   if(hash){ mostrarResultado(hash); }
 });
 
+// FUNCIÓN AUXILIAR PARA INICIAR VIDEO Y ESCANEO DE FORMA ROBUSTA
+function comenzarReproduccionYEscaneo(video, statusEl) {
+  video.play().then(() => {
+    statusEl.textContent = 'Buscando código QR…';
+    statusEl.className = 'scan-status';
+    lastScanTime = 0;
+    
+    // Evitar bucles duplicados de requestAnimationFrame
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+    }
+    rafId = requestAnimationFrame(tick);
+  }).catch(err => {
+    console.error("Error al reproducir video:", err);
+    statusEl.textContent = 'Error al reproducir video de cámara.';
+    statusEl.className = 'scan-status err';
+  });
+}
+
 // INICIAR CÁMARA
 async function iniciarEscaneo(){
   mostrarPantalla('camera');
@@ -227,12 +246,13 @@ async function iniciarEscaneo(){
     const video=document.getElementById('videoEl');
     video.srcObject=stream;
     video.setAttribute('playsinline',true);
-    video.onloadedmetadata=()=>{
-      video.play();
-      statusEl.textContent='Buscando código QR…';
-      lastScanTime = 0;
-      rafId=requestAnimationFrame(tick);
-    };
+    
+    // Validar si los metadatos ya están cargados para evitar que no se dispare el evento en ejecuciones posteriores
+    if (video.readyState >= 1) {
+      comenzarReproduccionYEscaneo(video, statusEl);
+    } else {
+      video.onloadedmetadata = () => comenzarReproduccionYEscaneo(video, statusEl);
+    }
 
     // Detectar cámaras disponibles después de obtener permiso
     try {
@@ -282,12 +302,12 @@ async function cambiarCamara() {
     const video = document.getElementById('videoEl');
     video.srcObject = stream;
     video.setAttribute('playsinline', true);
-    video.onloadedmetadata = () => {
-      video.play();
-      statusEl.textContent = 'Buscando código QR…';
-      lastScanTime = 0;
-      rafId = requestAnimationFrame(tick);
-    };
+    
+    if (video.readyState >= 1) {
+      comenzarReproduccionYEscaneo(video, statusEl);
+    } else {
+      video.onloadedmetadata = () => comenzarReproduccionYEscaneo(video, statusEl);
+    }
   } catch (err) {
     console.error("Error al cambiar de cámara:", err);
     statusEl.textContent = 'Error al cambiar de cámara.';
@@ -359,54 +379,84 @@ function tick(timestamp){
 function escanearDesdeArchivo(event) {
   const file = event.target.files[0];
   if (!file) return;
-  
+
   const reader = new FileReader();
   reader.onload = (e) => {
     const img = new Image();
     img.onload = () => {
-      const canvas = document.getElementById('canvasEl');
-      let width = img.width;
-      let height = img.height;
-      
-      const maxDimension = 1024;
-      if (width > maxDimension || height > maxDimension) {
-        if (width > height) {
-          height = Math.round((height * maxDimension) / width);
-          width = maxDimension;
-        } else {
-          width = Math.round((width * maxDimension) / height);
-          height = maxDimension;
-        }
-      }
-      
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-      
-      try {
-        const imageData = ctx.getImageData(0, 0, width, height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'attemptBoth'
-        });
-        
-        if (code && code.data) {
-          const payload = code.data.trim();
-          const url = BASE_URL + '/#' + payload;
-          history.replaceState(null, '', url);
-          mostrarResultado(payload);
-        } else {
-          alert("No se pudo detectar un código QR en la imagen. Por favor, asegúrate de que la foto sea nítida y tenga buena iluminación.");
-        }
-      } catch (err) {
-        console.error("Error al decodificar imagen:", err);
-        alert("Ocurrió un error al procesar la imagen.");
-      }
+      // Intentamos múltiples estrategias hasta encontrar el QR
+      const resultado = intentarLeerQR(img);
       event.target.value = '';
+
+      if (resultado) {
+        const url = BASE_URL + '/#' + resultado;
+        history.replaceState(null, '', url);
+        mostrarResultado(resultado);
+      } else {
+        alert("No se encontró un código QR válido en la imagen.\n\nConsejos:\n• Usa el reverso de la credencial\n• Asegúrate que el QR esté bien iluminado y sin reflejos\n• Toma la foto más de cerca al QR");
+      }
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+
+// Intenta leer el QR con múltiples escalas y recortes
+function intentarLeerQR(img) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  // ESTRATEGIA 1: imagen completa en varias resoluciones
+  const escalas = [800, 1200, 1600, 600, 400];
+  for (const maxDim of escalas) {
+    let w = img.width, h = img.height;
+    if (w > maxDim || h > maxDim) {
+      if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+      else        { w = Math.round(w * maxDim / h); h = maxDim; }
+    }
+    canvas.width = w; canvas.height = h;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0, w, h);
+    const found = jsQR(ctx.getImageData(0,0,w,h).data, w, h, {inversionAttempts:'attemptBoth'});
+    if (found && found.data) return found.data.trim();
+  }
+
+  // ESTRATEGIA 2: recortar la mitad superior de la imagen
+  // (el QR del reverso está en la parte superior ~40% de la credencial)
+  const recortes = [
+    // [sx, sy, sw, sh] como fracción del total
+    [0,    0,    1,    0.5],  // mitad superior
+    [0,    0,    1,    0.45], // 45% superior
+    [0.05, 0.03, 0.9,  0.45], // zona interior superior
+    [0,    0,    1,    0.7],  // 70% superior
+    [0.1,  0.05, 0.8,  0.5],  // recorte más ajustado
+  ];
+
+  for (const [fx, fy, fw, fh] of recortes) {
+    const sx = Math.floor(img.width  * fx);
+    const sy = Math.floor(img.height * fy);
+    const sw = Math.floor(img.width  * fw);
+    const sh = Math.floor(img.height * fh);
+
+    // Dibujar solo esa región escalada a ~800px
+    const maxDim = 800;
+    let w = sw, h = sh;
+    if (w > maxDim || h > maxDim) {
+      if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+      else        { w = Math.round(w * maxDim / h); h = maxDim; }
+    }
+    canvas.width = w; canvas.height = h;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+    const found = jsQR(ctx.getImageData(0,0,w,h).data, w, h, {inversionAttempts:'attemptBoth'});
+    if (found && found.data) return found.data.trim();
+  }
+
+  return null;
 }
 
 // DETENER CÁMARA
